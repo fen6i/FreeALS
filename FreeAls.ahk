@@ -19,6 +19,8 @@ essenceSpots := Map(
     4, {x: 614, y: 351 },
     5, {x: 614, y: 463 }
 )
+
+
 modifiers := Map(
     "BareBones", BareBones,
     "TowerLimit", TowerLimit,
