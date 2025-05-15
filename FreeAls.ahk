@@ -19,8 +19,6 @@ essenceSpots := Map(
     4, {x: 614, y: 351 },
     5, {x: 614, y: 463 }
 )
-
-
 modifiers := Map(
     "BareBones", BareBones,
     "TowerLimit", TowerLimit,
@@ -115,7 +113,7 @@ global uiTheme := []
 global F1Key := "F1"
 global F2Key := "F2"
 global F3Key := "F3"
-Hotkey(F1Key, (*) => Zoom())
+Hotkey(F1Key, (*) => ActivateRoblox())
 Hotkey(F2Key, (*) => StartMacro())
 Hotkey(F3Key, (*) => Reload())
 uiTheme.Push("0xffffff") 
@@ -2960,5 +2958,4 @@ AbilityCheck() {
         }
     } 
 }
-
 c::ExitApp()
