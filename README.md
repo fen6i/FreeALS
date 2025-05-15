@@ -20,5 +20,4 @@ Fendi Macro's is a fully automated, customizable macro system designed specifica
 
 - [@ZqDoki (AV)](https://discord.com/users/709147208653471836)
 - [@fendi (ALS & ARX)](https://discord.com/users/1060247339207512114)
-
-- ![Logo](https://i.postimg.cc/vZj6vYf6/image-1.png)
+![Logo](https://i.postimg.cc/vZj6vYf6/image-1.png)
