@@ -147,7 +147,7 @@ MainGUI.BackColor := 0x1E1E1E
 MainGUI.SetFont("", "Segoe UI bold")
 
 global game := "Anime Last Stand"
-global ver := "2.0.0"       
+global ver := "2.1.5"       
 global Creator := "Fendi"
 TitleMsg := Creator " " game " v" ver
 global title := MainGui.AddText("w300 h24 x5 y3 BackgroundTrans", TitleMsg)
