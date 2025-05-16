@@ -1778,9 +1778,15 @@ global LoadedDelay
         || (ok:=FindText(&X, &Y, x1, y1, x2, y2, 0, 0, SurvLoaded))
         || (ok:=FindText(&X, &Y, x1, y1, x2, y2, 0, 0, SurvLoaded1)) {
             
-            delaySec := Number(LoadedDelay.Value)
-            if (delaySec > 0)
-                Sleep(delaySec * 1000)
+            if IsSet(LoadedDelay) && LoadedDelay.HasProp("Value") {
+                delaySec := Number(LoadedDelay.Value)
+                if (delaySec > 0)
+                    Sleep(delaySec * 1000)
+                else
+                    Sleep(2000)
+            } else {
+                Sleep(2000)
+            }            
 
             global MaxedUnits := Map()
             return true
