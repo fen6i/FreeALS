@@ -9,15 +9,38 @@ SendMode "Event"
 #Include "lib\OCR-main\Lib\OCR.ahk"
 #NoTrayIcon
 global StageStartTime := 0
+global MacroPlannerGUI := 0
+global planRows := []
+global planQueue := []
+global PlacementPoints := []
 global excludeModi := []
+global PortalCoords := [ [291, 334], [502, 333], [703, 332] ]
+global foundPreviously := Map()
+LoadDelaySettings()
 global ExcludeGui := 0
 global IsExcludeVisible := false
+
+global ModSettingsGui := 0
+global IsModSettingsVisible := false
+
+global DelayGui := 0
+global IsDelayVisible := false
 essenceSpots := Map(
     1, {x: 238, y: 450 },
     2, {x: 431, y: 452 },
     3, {x: 608, y: 248 },
     4, {x: 614, y: 351 },
     5, {x: 614, y: 463 }
+)
+defaultPrio := Map(
+    "NoHit", 1,
+    "TowerLimit", 2,
+    "Immunity", 3,
+    "Flight", 4,
+    "ShortRange", 5,
+    "Speedy", 6,
+    "HighCost", 7,
+    "BareBones", 8
 )
 modifiers := Map(
     "BareBones", BareBones,
@@ -38,7 +61,7 @@ global elementToEssence := Map(
 )
 essences := Map(
     "DarkEssence",  "|<>*111$79.zzzzzzzzzzzzzzzzzzzzzzzzzzwDzyDs7zzzzzzw1zz7s3zzzzzzy8TzXwTzzzzzzz7801C3kkkEA47XY0070tNM0221lkEA7UQA80MC0sk8a3lz746A71y1UHUw3331aEET1sPqS1VVkrAQDzzzzzzzzzzzzzzzzzzzzzzzzzzk",
-    "LightEssence", "|<>*106$81.zzzzzzzzzzzzzzzzzzzzzzzzzzzrlz7vw3zzzzzzwTTsyT0TzzzzzzXzz7lszzzrzzxwS80471sMM8623Xl000s7//00EEAS30mT0sME0kQ1Xk86HszXW163UQ384m7UMMMAm23k/ViMw333ViMsTzzDzzzzzzzzzzzz1zzzzzzzzzzzzyzzzzzzzzzzzU",
+    "LightEssence", "|<>*106$81.zzzzzzzzzzzzzzzzzzzzzzzzzzzrlz7vw3zzzzzzwTTsyT0TzzzzzzXzz7lszzzrzzxwS80471sMM8623Xl000s7//00EEAS30mT0sME0kQ1Xk86HszXW163UQ384m7UMMMAm23k/ViMw333ViMsTzzDzzzzzzzzzzzz1zzzzzzzzzzzzzzyzzzzzzzzzzzU",
     "FireEssence",  "|<>*111$74.zzzzzzzzzzzzzzzzzzzzzzzzz07zzUTzzzzzzU3zzk7zzzzzzszzzwTzzzzzzy308D1sMM8623UE21kCKK00UUM430Q3VV031k6D0kT7wQEMkQ7ntC3s6663AUUxyrky1VVkrAQDzzzzzzzzzzzzzzzzzzzzzzzzs",
     "NatureEssence","|<>*109$94.zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzxtzvzzzy1zzzzzzzXbzDzzzk7zzzzzzy6TwTzzz7zzzzzzzs9U060Uw7VVUUM8DU600M21kCKK00UUS8F4lUk70sME0kQ1sV4HYH1wTll1X1kTn6121C3s6663AUUzSQCAZwDUMMQBn73zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzy",
     "WaterEssence", "|<>*110$89.zzzzzzzzzzzzzzzzzzzzzzzzzzzzzziRzrzzs7zzzzzzyAlzDzzUDzzzzzzyEbyDzz7zzzzzzzwV8088C3kkkEA47s0E0E0Q3ZZU0887s14H03s732063UDlW8a37lz746A71zX6123DkAAA6N11zjS766zUMMQBn73zzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
@@ -116,6 +139,7 @@ global F3Key := "F3"
 Hotkey(F1Key, (*) => ActivateRoblox())
 Hotkey(F2Key, (*) => StartMacro())
 Hotkey(F3Key, (*) => Reload())
+
 uiTheme.Push("0xffffff") 
 SetTimer(HandleStatControls, 1000)
 global MainGUI := Gui("-Caption ")
@@ -197,10 +221,11 @@ WebhookURLEdit.SetFont("s9")
 
 global TestWebhookBtn := MainGui.AddButton("x1086 y551 w53 h22", "Test")
 TestWebhookBtn.OnEvent("Click", (*) => SendTestWebhook())
+
 global SendScreenshot := MainGui.AddCheckbox("x1005 y575 w135 h22 cffffff", "Screenshot")
 SendScreenshot.SetFont("s9")
 
-global AutoAbility := MainGUI.AddCheckbox("x1309 y405 w80 h20 cffffff", "Auto Ability")
+global AutoAbility := MainGUI.AddCheckbox("x1309 y410 w80 h20 cffffff", "Auto Ability")
 
 global NextPageBtn := MainGui.AddButton("x1345 y6 w50 h20", ">>")
 NextPageBtn.SetFont("s9")
@@ -214,10 +239,6 @@ PrevPageBtn.OnEvent("Click", (*) => PrevPageFunc())
 btnW := 94
 gap := 5
 startX := 1005 
-
-global LoadedDelay := MainGUI.AddEdit("x1365 y435 w20 h20 Number Limit2", "2")
-LoadedDelayDesc := MainGUI.AddText("x1270 y438 w10000 h50 BackgroundTrans cffffff", "Delay after Loaded:")
-
 global DebugBtn := MainGUI.AddButton("x" startX " y605 w" btnW " h20", "Debug Macro")
 DebugBtn.OnEvent("Click", (*) => debug())
 global SaveSettingsBtn := MainGUI.AddButton("x" (startX + btnW + gap) " y605 w" btnW " h20", "Save Settings")
@@ -230,14 +251,18 @@ global DifSwitch := MainGUI.AddDropDownList("x1205 y380 w92 Choose2", ["Normal",
 global UpgModeLable := MainGUI.AddText("x1305 y383 w1000 h50 cffffff BackgroundTrans", "Upg: ")
 global PrioPlaceBtn := MainGUI.AddButton("x1205 y348 w92", "Priority Place")
 global PrioUpgrBtn := MainGUI.AddButton("x1302 y348 w92", "Priority Upgrade")
-global OpenExcGi := MainGUI.AddButton("x1205 y380 w92 Choose3", "Portal Modifiers")
+global PlaceMode := MainGUI.AddDropDownList("x1205 y410 w92 Choose3", ["Circle 1", "Circle 2","Grid", "Random"])
+global OpenExcGi := MainGUI.AddButton("x1205 y380 w92 Choose3", "Modifier Settings")
+global OpenDelayGui := MainGUI.AddButton("x1302 y433 w92", "Delays")
 OpenExcGi.Visible := false
-OpenExcGi.OnEvent("Click", (*) => showExcludeGui())
+OpenExcGi.OnEvent("Click", (*) => showModSettingsGui())
+OpenDelayGui.OnEvent("Click", (*) => showDelayGui())
 PrioPlaceBtn.OnEvent("Click", (*) => showPlacePrioGui()) 
 PrioUpgrBtn.OnEvent("Click", (*) => togglePrioGui()) 
 UpgModeLable.SetFont("s9 bold")
 global UpgModeSelect := MainGUI.AddButton("x1338 y381 h20 w50", "Multi")
 UpgModeSelect.OnEvent("Click", (*) => ChangeUpgMode())
+ModeSettingsControls.Push(PlaceMode)
 ModeSettingsControls.Push(SendScreenshot)
 ModeSettingsControls.Push(WebhookEnabled)
 ModeSettingsControls.Push(PingUser)
@@ -252,53 +277,55 @@ DifSwitch.Visible := false
 for ctrl in ModeSettingsControls 
     ctrl.Visible := false
 
-showExcludeGui() {
-    global excludeModi, modifiers, ExcludeGui, IsExcludeVisible
+CheckAndCollectPortals() {
+    global modifiers, PortalCoords
 
-    if !IsSet(ExcludeGui) || !ExcludeGui {
-        ExcludeGui := Gui("+AlwaysOnTop", "Exclude Modifiers")
-        ExcludeGui.BackColor := "0x2d2d30"
-        ExcludeGui.SetFont("s9", "Segoe UI")
-        local title := ExcludeGui.AddText("x10 y10 w200 cffffff", "Exclude Modifiers")
-        title.SetFont("s10 bold")
-        y := 40 
-        for name in modifiers {
-            isExcluded := ArrayHasValue(excludeModi, name)
-            cb := ExcludeGui.AddCheckbox("x10 y" y " cffffff", name)
-            cb.Value := isExcluded
-            cb.OnEvent("Click", makeHandler(name))
-            y += 30
+    defaultPrio := Map(
+        "NoHit", 1,
+        "TowerLimit", 2,
+        "Immunity", 3,
+        "Flight", 4,
+        "ShortRange", 5,
+        "Speedy", 6,
+        "HighCost", 7,
+        "BareBones", 8
+    )
+
+    portalData := []  
+
+    for i, pos in PortalCoords {
+        x := pos[1], y := pos[2]
+        MouseMove(x, y)
+        Sleep(300)  
+        x1 := 0, y1 := 0, x2 := A_ScreenWidth, y2 := A_ScreenHeight
+        thisPortalMods := []
+        for modName, modPattern in modifiers {
+            if FindText(&X, &Y, x1, y1, x2, y2, 0, 0, modPattern)
+                thisPortalMods.Push(modName)
         }
 
-        ExcludeGui.OnEvent("Close", (*) => (IsExcludeVisible := false))
+        score := 0
+        for mod in thisPortalMods {
+            score += defaultPrio.Has(mod) ? defaultPrio[mod] : 999
+        }
+
+        portalData.Push({pos: pos, mods: thisPortalMods, score: score})
     }
 
-    if IsExcludeVisible {
-        ExcludeGui.Hide()
-        IsExcludeVisible := false
-    } else {
-        ExcludeGui.Show("h280 w150")
-        IsExcludeVisible := true
-    }
-}
-
-makeHandler(modName) {
-    return (ctrl, *) => updateExclusion(modName, ctrl.Value)
-}
-
-updateExclusion(name, state) {
-    global excludeModi
-    if state {
-        if !ArrayHasValue(excludeModi, name) 
-            excludeModi.Push(name)
-    } else {
-        for i, item in excludeModi {
-            if item = name {
-                excludeModi.RemoveAt(i)
-                break
+    for i, _ in portalData {
+        for j, _ in portalData {
+            if (j < portalData.Length && portalData[j].score > portalData[j + 1].score) {
+                temp := portalData[j]
+                portalData[j] := portalData[j + 1]
+                portalData[j + 1] := temp
             }
         }
     }
+
+    best := portalData[1]
+    FixClick(best.pos[1], best.pos[2])  
+    Sleep(200)
+    FixClick(499, 475)
 }
 
 SlowType(text, delay := 43) {
@@ -319,7 +346,8 @@ checkPortalModi() {
             return name  
         }
     }
-    return false 
+
+    return false  ; ❌ No modifier detected
 }
 
 StartPortal(portal) {
@@ -330,7 +358,6 @@ StartPortal(portal) {
         return
     }
 
-    ; Click through Roblox UI to reach portals list
     Sleep(500)
     FixClick(87, 317) ; open items
     Sleep(500)
@@ -412,7 +439,10 @@ EasterMode() {
 }
 
 InfCastleMode() {
-
+InfinityCastleMovement()
+CheckLoaded()
+SetupGame() 
+PlaceUnitsPoints()
 }
 
 RaidMode() {
@@ -454,6 +484,11 @@ if ok:=FindText(&X, &Y, 496-150000, 450-150000, 496+150000, 450+150000, 0, 0, In
         FixClick(438, 474)
     }
 }
+FixMove(339, 474) ; start
+}
+
+ConvertDelay(num) {
+    return num * 1000
 }
 
 RaidMovement() {
@@ -549,6 +584,8 @@ CavernMovement() {
         HandleDifficulty()
         Sleep(1000)
         FixClick(499, 472)
+        global TelBtn4:="|<>*138$35.0000000000007z00C0Eu00Y1Va01A2D7zyA6A6608A4M88kS9WFnUqHArb1Un1h63Xb3PA3zzzrtzzzzzzzzzzzw"
+        global TelBtn3:="|<>*138$35.0000000000007z00C0Eu00Y1Va01A2D7zyA6A6608A4M88kS9WFnUqHArb1Un1h63Xb3PA3zzzrtzzzzzzzzzzzw"
         while (ok:=FindText(&X, &Y, x1, y1, x2, y2, 0, 0, TelBtn4)) || (ok:=FindText(&X, &Y, x1, y1, x2, y2, 0, 0, TelBtn3)) {  
             FixClick(732, 492)
             Sleep(375)
@@ -782,8 +819,14 @@ SurvMovement() {
 }
 
 IsInLobby() {
+    global LobbyText, LobbyText1
     x1 := 0, y1 := 0, x2 := A_ScreenWidth, y2 := A_ScreenHeight
-    return (ok:=FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, LobbyText))
+    local fx, fy
+
+    return (
+        FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, LobbyText)
+        || FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, LobbyText1)
+    )
 }
 
 EasterMovement() {
@@ -847,11 +890,25 @@ BClick(to_x, to_y, button := "Left") {
     Sleep(50)
 }
 
+MoveForCathedral() {
+    FixClick(447, 68, "Right")
+    Sleep(5000)
+}
+
+MoveForGate() {
+    HoldKey("A", 6300)
+    HoldKey("S", 1000)
+}
+
 MoveForNoName() {
     FixClick(599, 72, "Right")
     Sleep(4000)
     FixClick(631, 285, "Right")
     Sleep(3000)
+}
+
+MoveForSKPalace() {
+    HoldKey("S", 1500)
 }
 
 MoveForU18() {
@@ -1050,7 +1107,7 @@ UpdateDifficultyVisibility() {
     if (mode = "Cavern") {
         showDiff := true
         DifSwitch.Delete()
-        DifSwitch.Add(["Normal", "Nightmare", "Purgatory"])
+        DifSwitch.Add(["Normal", "Nightmare", "Purgatory", "Insanity"])
     }
 
     else if (mode = "Infinity Castle") {
@@ -1109,7 +1166,7 @@ ActChanged(*) {
 }
 
 ConfirmModeSelection() {
-    global modeDDL, mapDDL, actDDL, ConfirmModeBtn, StatsControls, SelectedModeText, OpenExcGi
+    global modeDDL, mapDDL, actDDL, ConfirmModeBtn, StatsControls, SelectedModeText, PlaceMode, OpenExcGi
     global mode, act, HotkeyHintText, unitControls, UnitPage, DifSwitch
     MainSettingBorder1 := uiBorders.Push(MainGui.AddText("x999 y365 w201 h1 +Background" uiTheme[1])) 
     MainSettingBorder2 := uiBorders.Push(MainGui.AddText("x999 y425 w201 h1 +Background" uiTheme[1])) 
@@ -1139,6 +1196,11 @@ ConfirmModeSelection() {
 
     HotkeyHintText.Text := "F1: Fix Roblox`nF2: Start Macro`nF3: Restart Macro"
     HotkeyHintText.Visible := true
+
+    if (modeDDL.Text != "Infinity Castle")
+        PlaceMode.Enabled := false
+    else
+        PlaceMode.Enabled := true  ; Optional, in case it needs re-enabled
 
     if (modeDDL.Text != "Portals")
         OpenExcGi.Visible := false
@@ -1339,8 +1401,8 @@ CaptureRobloxScreenshot(OutputFile) {
     WinGetClientPos(&cx, &cy, &cw, &ch, hwnd)
     WinGetPos(&wx, &wy,,, hwnd)
 
-    x := wx + cx+4
-    y := wy + cy
+    x := wx + cx+9
+    y := wy + cy-1
 
     if (cw = 0 || ch = 0) {
         MsgBox("❌ Invalid client area size.")
@@ -1375,30 +1437,35 @@ SendTestWebhook() {
         return
     }
 
+    ; Save screenshot if enabled
     ScreenshotPath := A_ScriptDir "\test_screenshot.png"
     if (includeScreenshot)
         CaptureRobloxScreenshot(ScreenshotPath)
 
     hasScreenshot := includeScreenshot && FileExist(ScreenshotPath)
     fileName := "test_screenshot.png"
-    fileObj := hasScreenshot ? [{name: fileName, fileName: ScreenshotPath}] : []
+    fileObj := hasScreenshot ? [{ fileName: ScreenshotPath }] : []
 
-    pingMsg := (shouldPing && userID != "") ? "<@" userID ">" : " "
+    ; Ping message
+    pingMsg := (shouldPing && userID != "") ? "<@" userID ">" : ""
 
+    ; Build embed
     embed := EmbedBuilder()
     embed.setTitle("✅ Test Webhook")
-    embed.setDescription("This is a test message from the Fendi Macro Settings lol")
+    embed.setDescription("This is a test message from the Fendi Macro Settings.")
     embed.setColor(0x00ffcc)
     embed.setFooter({text: "Fendi Macro • Webhook Test"})
-    embed.addFields([
-        { name: "📅 Time Sent:", value: FormatTime(A_Now, "yyyy-MM-dd HH:mm:ss"), inline: true }
-    ])
+    embed.addFields([{
+        name: "📅 Time Sent:",
+        value: FormatTime(A_Now, "yyyy-MM-dd HH:mm:ss"),
+        inline: true
+    }])
 
     if hasScreenshot
         embed.setImage({ url: "attachment://" fileName })
 
+    ; Send it
     webhook := Discord.Webhook(url)
-
     try {
         webhook.Send({
             content: pingMsg,
@@ -1407,7 +1474,7 @@ SendTestWebhook() {
         })
         MsgBox("✅ Test webhook sent successfully.")
     } catch as e {
-        ; MsgBox("❌ Webhook error: " e.Message)
+        MsgBox("❌ Webhook failed:`n" e.Message)
     }
 
     if hasScreenshot
@@ -1449,7 +1516,12 @@ global ModeImages := Map(
     "Tournament of Power", A_ScriptDir "\lib\images\coords_top.png",
     "No-Name Planet",    A_ScriptDir "\lib\images\coords_noname.png",
     "Void",              A_ScriptDir "\lib\images\coords_void.png",
-
+    "Soul Society (invaded)",A_ScriptDir "\lib\images\coords_ssinvaded.png",
+    "Gate",              A_ScriptDir "\lib\images\coords_gate.png",
+    "Demon Skull Village",A_ScriptDir "\lib\images\coords_DSVillage.png",
+    "Soul King Palace",   A_ScriptDir "\lib\images\coords_skpalace.png",
+    "Ashen Ruins",        A_ScriptDir "\lib\images\coords_ashen.png",
+    "Abandoned Cathedral",A_ScriptDir "\lib\images\coords_cathedral.png",
 )
 
 HandleImgGuiClose(*) {
@@ -1676,19 +1748,21 @@ DeleteMarker(ctrl) {
 
 CheckLobby() {
     global modeDDL
+    x1 := 0, y1 := 0, x2 := A_ScreenWidth, y2 := A_ScreenHeight
     loop {
-        Sleep 1000
-        if (ok := FindText(&X, &Y, 746, 514, 789, 530, 0, 0, LobbyText)) {
+        Sleep 100
+        if (ok := FindText(&X, &Y, x1, y1, x2, y2, 0, 0, LobbyText)) {
             break
         }
     }
     global ModeDDL
     mode := ModeDDL.Text
-    return StartMode(modeDDL.Text)
+    FixClick(791, 146)
+    return 
 }
 
 CheckLoaded() {
-    global LoadedDelay
+global LoadedDelay
     timeOut := 60000
     start := A_TickCount
     loop {
@@ -1703,7 +1777,7 @@ CheckLoaded() {
         || (ok:=FindText(&X, &Y, x1, y1, x2, y2, 0, 0, VoteStart3))
         || (ok:=FindText(&X, &Y, x1, y1, x2, y2, 0, 0, SurvLoaded))
         || (ok:=FindText(&X, &Y, x1, y1, x2, y2, 0, 0, SurvLoaded1)) {
-
+            
             delaySec := Number(LoadedDelay.Value)
             if (delaySec > 0)
                 Sleep(delaySec * 1000)
@@ -1714,27 +1788,6 @@ CheckLoaded() {
     }
     Sleep(100)
     global MaxedUnits := Map()
-    return false
-}
-
-FixDisconnect() {
-    global modeDDL
-    FixClick(591, 419) ; click reconnect
-    CheckLobby()
-    FixClick(791, 146) ; close upd log
-    return StartMode(modeDDL.Text)
-}
-
-Disconnected() {
-    global modeDDL, mapDDL, actDDL, Disconnect1, Disconnect2, Disconnect3
-    x1 := 0, y1 := 0, x2 := A_ScreenWidth, y2 := A_ScreenHeight
-    if (
-        FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, Disconnect1)
-        || FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, Disconnect2)
-        || FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, Disconnect3)
-    ) {
-        return true
-    }
     return false
 }
 
@@ -1939,8 +1992,6 @@ HandleDifficulty() {
 
 HandleMapMovement(mapName) {
     switch mapName {
-        case "U-18":
-            return MoveForU18()
         case "Central City": 
             return MoveForCentralCity()
         case "Oasis":
@@ -1949,6 +2000,12 @@ HandleMapMovement(mapName) {
             return MoveForUnknown()
         case "No-Name Planet":
             return MoveForNoName()
+        case "Soul King Palace":
+            return MoveForSKPalace()
+        case "Gate":
+            return MoveForGate()
+        case "Abandoned Cathedral":
+            return MoveForCathedral()
         default:
             return
     }
@@ -1963,8 +2020,6 @@ UnitPlaced(slot, x, y) {
         Sleep 150
         return true
     }
-
-    FixClick(500, 515)
     Sleep 300
     FixClick(x, y)
     Sleep 300
@@ -1979,7 +2034,6 @@ UnitPlaced(slot, x, y) {
     Sleep(300)
     SendEvent("V")
     SendEvent("X")
-    FixClick(510, 515)
     return false
 }
 
@@ -2048,7 +2102,7 @@ GetMapCoords(MapName) {
         case "Hell City" :
             return { x: 280, y: 250, scroll: 0}
         case "Flower Garden":
-            return { x: 280, y: 400, scroll: 1}
+            return { x: 280, y: 360, scroll: 1}
         case "Central City":
             return { x: 280, y: 370, scroll: 0}
         case "Oasis":
@@ -2092,6 +2146,7 @@ GetMapCoords(MapName) {
     }
 }
 
+
 CloseChat() {
     if (ok:=FindText(&X, &Y, 136-150000, 65-150000, 136+150000, 65+150000, 0, 0, OpenChat)) {
         FixClick(138, 64)
@@ -2105,81 +2160,12 @@ TpSpawn() {
     Sleep(175)
     FixClick(659, 135)
 }
-
 StartGame() {
-    FixClick(447, 533)
+    FixClick(447, 523)
     sleep 100
-    FixClick(447, 533)
+    FixClick(447, 523)
     sleep 100
-    FixClick(447, 533)
-}
-
-Retrycheck() {
-    global SuccessCount, modeDDL, VictoryText, VictoryText2, DefeatText, DefeatText2, retry, next, loss, wins, FailCount, StageStartTime, AvgTime
-    mode := modeDDL.Text
-    x1 := 0, y1 := 0, x2 := A_ScreenWidth, y2 := A_ScreenHeight
-    if ((FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, VictoryText) || FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, VictoryText2)) && FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, retry)) {
-        SuccessCount++
-        elapsed := (A_TickCount - StageStartTime) // 1000
-        AvgTime := ((AvgTime * (SuccessCount + FailCount - 1)) + elapsed) // (SuccessCount + FailCount)
-        global winChance := GetWinrate()
-        SendWebhook(true)
-        Sleep(1000)
-        FixClick(515, 452)
-        FixClick(515, 452)
-        FixClick(515, 452)
-        CheckLoaded()
-        return true
-    }
-    if ((FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, DefeatText) || FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, DefeatText2)) && FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, retry)) {
-        FailCount++
-        elapsed := (A_TickCount - StageStartTime) // 1000
-        AvgTime := ((AvgTime * (SuccessCount + FailCount - 1)) + elapsed) // (SuccessCount + FailCount)
-        global winChance := GetWinrate()
-        SendWebhook(true)
-        Sleep(1000)
-        FixClick(515, 452)
-        FixClick(515, 452)
-        FixClick(515, 452)
-        CheckLoaded()
-        return true
-    }
-    ok1 := FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, StoryWin)
-    ok2 := FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, StoryEnd)
-    ok3 := FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, retry)
-    if ((ok1 && ok2) || (ok1 && ok3)) {
-        SuccessCount++
-        elapsed := (A_TickCount - StageStartTime) // 1000
-        AvgTime := ((AvgTime * (SuccessCount + FailCount - 1)) + elapsed) // (SuccessCount + FailCount)
-        global winChance := GetWinrate()
-        SendWebhook(true)
-        Sleep(1000)
-        FixClick(515, 452)
-        FixClick(515, 452)
-        FixClick(515, 452)
-        Sleep 10000
-        CheckLoaded()
-        return true
-    }
-
-    ok4 := FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, StoryLoss)
-    ok5 := FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, StoryEnd)
-    ok6 := FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, retry)
-    if ((ok4 && ok5) ||(ok4 && ok6))  {
-        FailCount++
-        elapsed := (A_TickCount - StageStartTime) // 1000
-        AvgTime := ((AvgTime * (SuccessCount + FailCount - 1)) + elapsed) // (SuccessCount + FailCount)
-        global winChance := GetWinrate()
-        SendWebhook(true)
-        Sleep(1000)
-        FixClick(515, 452)
-        FixClick(515, 452)
-        FixClick(515, 452)
-        Sleep 10000
-        CheckLoaded()
-        return true
-    }
-    return false 
+    FixClick(447, 523)
 }
 
 Shake() {
@@ -2199,6 +2185,7 @@ HandlePortalLoss() {
     FixClick(481, 453) 
     Sleep(1500)
     FixClick(337, 181) 
+    FixClick(337, 181) 
     Sleep(1250)
     Send mapDDL.Text
     Sleep(1000)
@@ -2208,6 +2195,7 @@ HandlePortalLoss() {
     Sleep(1000)
     FixClick(445, 359)
     CheckLoaded()
+    return true
 }
 
 HandlePortalWin() {
@@ -2215,16 +2203,18 @@ HandlePortalWin() {
     global Portal := mapDDL.Text
     SuccessCount++
     winrate := GetWinrate()
-    loop 4{
-        FixClick(501, 336)
-        Sleep(1000)
-        FixClick(499, 475)
-        Sleep(4000)
+    x1 := 0, y1 := 0, x2 := A_ScreenWidth, y2 := A_ScreenHeight
+    CheckAndCollectPortals()
+    Sleep(2500)
+    if FindText(&X, &Y, x1, y1, x2, y2, 0, 0, PortalConfirm1) {
+        CheckAndCollectPortals()
     }
+    Sleep(1000)
     SendWebhook(true)
     FixClick(481, 453)
     Sleep(1500)
     FixClick(337, 181)
+    FixClick(337, 181) 
     Sleep(1250)
     Send mapDDL.Text
     Sleep(1000)
@@ -2289,6 +2279,27 @@ RetryCheckMode(mode) {
         }
     }
 
+    else if (mode = "Infinity Castle") {
+        x1 := 0, y1 := 0, x2 := A_ScreenWidth, y2 := A_ScreenHeight
+        if (ok:=FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, InfCastleEnd1)
+            || FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, InfCastleEnd))
+            && FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, retryInfCastle) {
+            HandleVictory()
+            Sleep(100)
+            FixClick(515, 452)
+            return true
+        }
+
+        if (ok:=FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, DefeatText)
+            || FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, DefeatText2))
+            && FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, retry) {
+            HandleDefeat()
+            Sleep(100)
+            FixClick(515, 452)
+            return true
+        }
+    }
+
     else {
         x1 := 0, y1 := 0, x2 := A_ScreenWidth, y2 := A_ScreenHeight
         if (ok:=FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, VictoryText) || FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, VictoryText2))
@@ -2310,18 +2321,59 @@ RetryCheckMode(mode) {
     return false
 }
 
-SendWebhook(isWin := true) {
-    global WebhookURLEdit, PingUser, DiscordUserIDEdit, SendScreenshot
-    global mode, act, TotalRuns, SuccessCount, FailCount, winChance, WebhookEnabled
+FixDisconnect() {
+    global modeDDL
+    FixClick(591, 419) ; click reconnect
+    CheckLobby()
+    FixClick(791, 146) ; close upd log
+    return StartMode(modeDDL.Text)
+}
 
-    if !WebhookEnabled.Value {
-        return
+Disconnected() {
+    global modeDDL, mapDDL, actDDL, Disconnect1, Disconnect2, Disconnect3
+    x1 := 0, y1 := 0, x2 := A_ScreenWidth, y2 := A_ScreenHeight
+    if (
+        FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, Disconnect1)
+        || FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, Disconnect2)
+        || FindText(&fx, &fy, x1, y1, x2, y2, 0, 0, Disconnect3)
+    ) {
+        return true
     }
-    runTime := Floor((A_TickCount - MacroRuntime) / 1000)
-    hours := Floor(runTime / 3600)
-    mins := Floor(Mod(runTime / 60, 60))
-    secs := Mod(runTime, 60)
-    duration := (hours ? hours "h " : "") (mins ? mins "m " : "") secs "s"
+    return false
+}
+
+showModSettingsGui() {
+    global ModSettingsGui, IsModSettingsVisible
+
+    if !IsSet(ModSettingsGui) || !ModSettingsGui {
+        ModSettingsGui := Gui("+AlwaysOnTop", "Modifier Settings")
+        ModSettingsGui.BackColor := "0x2d2d30"
+        ModSettingsGui.SetFont("s9", "Segoe UI")
+
+        ModSettingsGui.AddButton("x10 y10 w150", "Exclude Modifiers")
+            .OnEvent("Click", (*) => showExcludeGui())
+
+        ModSettingsGui.AddButton("x10 y50 w150", "Priority Modifiers")
+            .OnEvent("Click", (*) => showPrioModGui())
+
+        ModSettingsGui.OnEvent("Close", (*) => IsModSettingsVisible := false)
+    }
+
+    if IsModSettingsVisible {
+        ModSettingsGui.Hide()
+        IsModSettingsVisible := false
+    } else {
+        ModSettingsGui.Show("AutoSize")
+        IsModSettingsVisible := true
+    }
+}
+
+SendWebhook(isWin := true) {
+    global WebhookURLEdit, PingUser, DiscordUserIDEdit, SendScreenshot, WebhookEnabled
+    global mode, act, TotalRuns, SuccessCount, FailCount, winChance
+
+    if !WebhookEnabled.Value
+        return
 
     url := WebhookURLEdit.Text
     userID := DiscordUserIDEdit.Text
@@ -2331,62 +2383,58 @@ SendWebhook(isWin := true) {
     if (url = "" || !RegexMatch(url, "^https:\/\/discord\.com\/api\/webhooks\/"))
         return
 
+    runTime := Floor((A_TickCount - MacroRuntime) / 1000)
+    hours := Floor(runTime / 3600)
+    mins := Floor(Mod(runTime / 60, 60))
+    secs := Mod(runTime, 60)
+    duration := (hours ? hours "h " : "") (mins ? mins "m " : "") secs "s"
+
     TotalRuns += 1
 
-    ScreenshotPath := A_ScriptDir "\round_screenshot.png"
-    if (includeScreenshot)
-        CaptureRobloxScreenshot(ScreenshotPath)
+    fileName := "round_screenshot.png"
+    filePath := A_ScriptDir "\" fileName
+    if includeScreenshot
+        CaptureRobloxScreenshot(filePath)
 
-    hasScreenshot := includeScreenshot && FileExist(ScreenshotPath)
-    attachment := hasScreenshot ? AttachmentBuilder("round_screenshot.png") : ""
+    hasScreenshot := includeScreenshot && FileExist(filePath)
+    fileObj := hasScreenshot ? [{ fileName: filePath }] : []  ; <- Corrected: only fileName is needed
 
     content := (shouldPing && userID != "") ? "<@" userID ">" : ""
 
-    embedColor := isWin ? 0x00cc66 : 0xcc0000
-    resultIcon := isWin ? "🟢" : "🔴"
     resultText := isWin ? "Victory" : "Defeat"
-
-    desc := "**Mode: ** " (mode ? mode : "Unknown") ""
-    if (act && act != "none")
-        desc .= " - " act ""
+    resultIcon := isWin ? "🟢" : "🔴"
+    color := isWin ? 0x00cc66 : 0xcc0000
 
     embed := EmbedBuilder()
     embed.setTitle(resultIcon " " resultText)
-    embed.setDescription(desc)
-    embed.setColor(embedColor)
-    embed.setFooter({ 
-        text: "Fendi Macro • Run Result • 🕓 " FormatTime(A_Now, "HH:mm:ss") 
-    })    
+    embed.setDescription("**Mode: ** " (mode ? mode : "Unknown") (act ? " - " act : ""))
+    embed.setColor(color)
+    embed.setFooter({ text: "Fendi Macro • Run Result • 🕓 " FormatTime(A_Now, "HH:mm:ss") })
 
     if hasScreenshot
-        embed.setImage({ url: attachment.attachmentName })
+        embed.setImage({ url: "attachment://" fileName })
 
-    embed.addFields([
-        {
-            name: " ",
-            value:
+    embed.addFields([{
+        name: " ",
+        value:
             "✅ Wins: " SuccessCount "`n"
           . "❌ Fails: " FailCount "`n"
           . "📊 Total: " TotalRuns "`n"
           . "🕒 Runtime: " duration "`n"
           . "📈 Win Rate: " GetWinrate(),
-            inline: false
-        }
-    ])
+        inline: false
+    }])
 
-    webhook := Discord.Webhook(url)
     try {
-        webhook.send({
+        Discord.Webhook(url).send({
             content: content,
             embeds: [embed],
-            files: hasScreenshot ? [attachment] : []
+            files: fileObj
         })
-    } catch as e {
-       ; MsgBox("❌ Webhook error: " e.Message)
     }
 
     if hasScreenshot
-        FileDelete(ScreenshotPath)
+        FileDelete(filePath)
 }
 
 GetWinrate() {
@@ -2398,10 +2446,6 @@ GetWinrate() {
         return winratePercent "% (" SuccessCount "W/" FailCount "L)"
     }
     return "0%"
-}
-
-ConvertDelay(num) {
-    return num * 1000
 }
 
 Zoom() {
@@ -2422,9 +2466,14 @@ Zoom() {
     }
 
     if modeDDL.Text = "Survival" || mapDDL.Text = "Holy Invasion" {
-        SendInput("{WheelDown}")
+        SendInput("{WheelUp}")
         Sleep(50)
-        SendInput("{WheelDown}")
+        SendInput("{WheelUp}")
+        Sleep(50)
+    }
+    
+    if modeDDL.Text = "Legend Stage" || mapDDL.Text = "Snowy Village" {
+        SendInput("{WheelUp}")
         Sleep(50)
     }
 }
@@ -2450,6 +2499,7 @@ MouseLookDown(totalY := 150, stepDelay := 10) {
 SetupGame() {
     global StageStartTime := A_TickCount
     global mapDDL, modeDDL
+    global MoveDelay
     global AdjustedOpacity := true
     mapName := MapDDL.Text
     mode := modeDDL.Text
@@ -2465,8 +2515,24 @@ SetupGame() {
         HandleMapMovement(mode)
     }
     HandleMapMovement(mapName)
-    Sleep(1000)
+    local delaySec := Number(MoveDelay.Value)
+    if (delaySec > 0)
+        Sleep(delaySec * 1000)
     StartGame()
+}
+
+SaveDelaySettings(*) {
+    global MoveDelay, LoadedDelay
+    IniWrite(LoadedDelay.Value, "settings\settings.ini", "Delay", "AfterLoad")
+    IniWrite(MoveDelay.Value, "settings\settings.ini", "Delay", "AfterMove")
+}
+
+LoadDelaySettings() {
+    global MoveDelay, LoadedDelay
+    try {
+        LoadedDelay.Value := IniRead("settings\settings.ini", "Delay", "AfterLoad", "2")
+        MoveDelay.Value := IniRead("settings\settings.ini", "Delay", "AfterMove", "2")
+    }
 }
 
 ValidateMode() {
@@ -2480,8 +2546,11 @@ ValidateMode() {
 }
 
 ValidateEnabledUnits() {
-    global unitControls
+    global unitControls, modeDDL
     hasEnabledUnits := false
+
+    if (modeDDL.Text = "Infinity Castle")
+        return true
 
     for page, units in unitControls {
         for unitNum, ctrlGroup in units {
@@ -2521,15 +2590,19 @@ StartMode(Mode) {
             PortalMode()
     }
 }
-
 RestartStage(mode:=false) {
     global modeDDL, mapDDL
+    CheckLoaded()
     SetupGame()
-    PlacingUnits() 
+    if modeDDL.Text != "Infinity Castle"{
+        PlacingUnits() 
+    }else {
+        PlaceUnitsPoints()
+    }
 }
 
 StartMacro(){
-    global modeDDL, actDDL, mapDDL, UpgModeSelect, UpgMode
+    global modeDDL, actDDL, mapDDL, UpgModeSelect, UpgMode, Placemode
 
     if !ValidateEnabledUnits() {
         MsgBox("No enabled units with valid coordinates found. Please configure your units.")
@@ -2594,6 +2667,7 @@ PlacingUnits() {
     }
 
     for idx, unit in sorted {
+
         if Disconnected() 
             FixDisconnect()
 
@@ -2608,9 +2682,6 @@ PlacingUnits() {
         retryCount := 0
         maxRetries := 100
     while (retryCount < maxRetries) {
-        if Disconnected() 
-            FixDisconnect()
-
         if RetryCheckMode(modeDDL.Text) {
             return RestartStage()
         }
@@ -2635,6 +2706,254 @@ PlacingUnits() {
 
     }
     UpgradeUnits()
+}
+
+IsPointUsed(x, y, coordsList) {
+    for _, unit in coordsList {
+        if (unit.screenX = x && unit.screenY = y)
+            return true
+    }
+    return false
+}
+
+
+PlaceUnitsPoints() {
+    global modeDDL, unitControls, successfulCoordinates, PlaceMode
+    successfulCoordinates := []
+    StageStartTime := A_TickCount
+
+    totalUnits := 0
+    placedUnits := 0
+
+    ; Choose point generation strategy from GUI dropdown
+    switch PlaceMode.Text {
+        case "Circle 1": pointPool := GenerateCircle1Points()
+        case "Circle 2": pointPool := GenerateCircle2Points()
+        case "Grid":     pointPool := GenerateGridPoints()
+        case "Random":   pointPool := GenerateRandomPoints()
+        default:         pointPool := GenerateGridPoints()
+    }
+
+    local sorted := []
+
+    for slotNum, units in unitControls {
+        for unitNum, ctrlGroup in units {
+            if !IsInteger(unitNum) || !ctrlGroup.checkbox.Value
+                continue
+
+            totalUnits++
+            sorted.Push({slot: slotNum, unit: unitNum})
+        }
+    }
+
+    ; Sort by priority
+    Loop sorted.Length - 1 {
+        Loop sorted.Length - A_Index {
+            a := sorted[A_Index]
+            b := sorted[A_Index + 1]
+            if ComparePlacePriorities(a, b) > 0 {
+                temp := sorted[A_Index]
+                sorted[A_Index] := sorted[A_Index + 1]
+                sorted[A_Index + 1] := temp
+            }
+        }
+    }
+
+    for idx, unit in sorted {
+        if RetryCheckMode(modeDDL.Text)
+            return RestartStage()
+
+        slotNum := unit.slot
+        unitNum := unit.unit
+
+        retryCount := 0
+        maxRetries := pointPool.Length
+        pointIndex := 1
+
+        while retryCount < maxRetries {
+            if Disconnected()
+                FixDisconnect()
+        
+            if IsInLobby()
+                return CheckLobby()
+        
+            if (pointIndex > pointPool.Length)
+                break
+        
+            pt := pointPool[pointIndex]
+            pointIndex++
+            retryCount++
+        
+            ; ✅ Skip already used coordinates
+            if IsPointUsed(pt.x, pt.y, successfulCoordinates)
+                continue
+        
+            if PlaceUnit(pt.x, pt.y, slotNum) {
+                unit.screenX := pt.x
+                unit.screenY := pt.y
+                successfulCoordinates.Push(unit)
+                placedUnits++
+                break
+            }
+        
+            Sleep(120)
+        }
+    }
+
+    if (totalUnits = placedUnits) {
+        ; all placed
+    } else {
+        ; some failed
+    }
+
+    UpgradeUnits()
+}
+
+makeHandler(modName) {
+    return (ctrl, *) => updateExclusion(modName, ctrl.Value)
+}
+
+updateExclusion(name, state) {
+    global excludeModi
+    if state {
+        if !ArrayHasValue(excludeModi, name) 
+            excludeModi.Push(name)
+    } else {
+        for i, item in excludeModi {
+            if item = name {
+                excludeModi.RemoveAt(i)
+                break
+            }
+        }
+    }
+}
+
+showDelayGui() {
+    handleSaveBtnDelay() {
+        SaveDelaySettings()
+        DelayGui.Hide()
+    }
+    global DelayGui, IsDelayVisible
+
+    if !IsSet(DelayGui) || !DelayGui {
+        DelayGui := Gui("+AlwaysOnTop", "Delay Settings")
+        DelayGui.BackColor := "0x2d2d30"
+        DelayGui.SetFont("s9", "Segoe UI")
+
+        DelayGui.AddText("x10 y10 cffffff", "Delay After Load (sec):")
+        global LoadedDelay := DelayGui.AddEdit("x160 y8 w40 Number Limit2", "2")
+
+        DelayGui.AddText("x10 y45 cffffff", "After Map Move (sec):")
+        global MoveDelay := DelayGui.AddEdit("x160 y43 w40 Number Limit2", "2")
+
+        SaveDelays := DelayGui.AddButton("x10 y80 w60", "Save").OnEvent("Click", (*) => handleSaveBtnDelay())
+        DelayGui.OnEvent("Close", (*) => IsDelayVisible := false)
+    }
+
+    if IsDelayVisible {
+        DelayGui.Hide()
+        IsDelayVisible := false
+    } else {
+        LoadDelaySettings()
+        DelayGui.Show("AutoSize")
+        IsDelayVisible := true
+    }
+}
+
+showExcludeGui() {
+    global excludeModi, modifiers, ExcludeGui, IsExcludeVisible
+
+    if !IsSet(ExcludeGui) || !ExcludeGui {
+        ExcludeGui := Gui("+AlwaysOnTop", "Exclude Modifiers")
+        ExcludeGui.BackColor := "0x2d2d30"
+        ExcludeGui.SetFont("s9", "Segoe UI")
+        local title := ExcludeGui.AddText("x10 y10 w200 cffffff", "Exclude Modifiers")
+        title.SetFont("s10 bold")
+        y := 40 
+        for name in modifiers {
+            isExcluded := ArrayHasValue(excludeModi, name)
+            cb := ExcludeGui.AddCheckbox("x10 y" y " cffffff", name)
+            cb.Value := isExcluded
+            cb.OnEvent("Click", makeHandler(name))
+            y += 30
+        }
+
+        ExcludeGui.OnEvent("Close", (*) => (IsExcludeVisible := false))
+    }
+
+    if IsExcludeVisible {
+        ExcludeGui.Hide()
+        IsExcludeVisible := false
+    } else {
+        ExcludeGui.Show("h280 w150")
+        IsExcludeVisible := true
+    }
+}
+global PrioModGui := 0
+global IsPrioModVisible := false
+global PrioModDropdowns := Map()
+showPrioModGui() {
+    global PrioModGui, IsPrioModVisible, modifiers, PrioModDropdowns, GuiState
+
+    if !IsSet(PrioModGui) || !PrioModGui {
+        PrioModGui := Gui("+AlwaysOnTop", "Priority Modifiers")
+        PrioModGui.BackColor := "0x2d2d30"
+        PrioModGui.SetFont("s9", "Segoe UI")
+
+        PrioModGui.AddText("x10 y10 w200 h30 BackgroundTrans cffffff", "Set Priority for Modifiers").SetFont("s10 bold")
+
+        y := 40
+        maxPriority := 8
+        priorities := []
+        Loop maxPriority
+            priorities.Push(A_Index)
+
+        for name, _ in modifiers {
+            PrioModGui.AddText("x10 y" y " w100 cffffff", name ":")
+        
+            items := []
+            for val in priorities
+                items.Push(val)
+        
+            ddl := PrioModGui.AddDropDownList("x120 y" y " w60", items)
+            PrioModDropdowns[name] := ddl
+        
+            key := "PrioMod_" name
+            if GuiState.Has(key) {
+                ddl.Text := GuiState[key]
+            } else if defaultPrio.Has(name) {
+                ddl.Text := defaultPrio[name]
+                GuiState[key] := defaultPrio[name]
+            }
+        
+            y += 30
+        }
+
+        PrioModGui.AddButton("x10 y" y+10 " w80", "Save").OnEvent("Click", SavePrioModPriorities)
+        PrioModGui.OnEvent("Close", (*) => IsPrioModVisible := false)
+    }
+
+    if IsPrioModVisible {
+        PrioModGui.Hide()
+        IsPrioModVisible := false
+    } else {
+        PrioModGui.Show("AutoSize")
+        IsPrioModVisible := true
+    }
+}
+
+SavePrioModPriorities(*) {
+    global PrioModDropdowns, GuiState
+
+    for name, ddl in PrioModDropdowns {
+        key := "PrioMod_" name
+        if ddl.Text != ""
+            GuiState[key] := ddl.Text
+        else if GuiState.Has(key)
+            GuiState.Delete(key)
+    }
+
+    MsgBox("Modifier priorities saved.")
 }
 
 UpgradeUnits() {
@@ -2680,6 +2999,9 @@ UpgradeUnits() {
             FixClick(500, 515)
             Sleep(1000)
 
+            if IsInLobby()
+                return CheckLobby()
+
             if Disconnected() 
                 FixDisconnect()
         
@@ -2709,6 +3031,9 @@ UpgradeUnits() {
 
             if Disconnected() 
                 FixDisconnect()
+
+            if IsInLobby()
+                return CheckLobby()
     
             if RetryCheckMode(mode) {
                 successfulCoordinates := []
@@ -2960,4 +3285,99 @@ AbilityCheck() {
         }
     } 
 }
-c::ExitApp()
+
+GenerateRandomPoints() {
+    points := []
+    gridSize := 20
+    centerX := 500
+    centerY := 330
+
+    minX := centerX - 180
+    maxX := centerX + 180
+    minY := centerY - 140
+    maxY := centerY + 140
+
+    Loop 60 {
+        x := Random(minX, maxX)
+        y := Random(minY, maxY)
+
+        tooClose := false
+        for pt in points {
+            if Sqrt((x - pt.x)**2 + (y - pt.y)**2) < gridSize {
+                tooClose := true
+                break
+            }
+        }
+
+        if !tooClose
+            points.Push({x: x, y: y})
+    }
+
+    points.Push({x: centerX, y: centerY})
+    return points
+}
+
+GenerateGridPoints() {
+    points := []
+    gridSize := 15
+    squaresPerSide := 7
+    centerX := 500
+    centerY := 330
+
+    startX := centerX - ((squaresPerSide - 1) / 2 * gridSize)
+    startY := centerY - ((squaresPerSide - 1) / 2 * gridSize)
+
+    Loop squaresPerSide {
+        y := startY + ((A_Index - 1) * gridSize)
+        Loop squaresPerSide {
+            x := startX + ((A_Index - 1) * gridSize)
+            points.Push({x: x, y: y})
+        }
+    }
+
+    return points
+}
+
+GenerateCircle1Points() {
+    points := []
+    centerX := 500
+    centerY := 330
+
+    radii := [45, 90, 135, 180]
+    angles := [0, 45, 90, 135, 180, 225, 270, 315]
+
+    for radius in radii {
+        for angle in angles {
+            radians := angle * 3.14159 / 180
+            x := centerX + radius * Cos(radians)
+            y := centerY + radius * Sin(radians)
+            points.Push({x: Round(x), y: Round(y)})
+        }
+    }
+
+    return points
+}
+
+GenerateCircle2Points() {
+    points := []
+
+    centerX := 500
+    centerY := 330
+
+    radiusList := [45, 90, 135, 180]
+    angles := [315, 270, 225, 180, 135, 90, 45, 0]  ; reverse direction
+
+    for radius in radiusList {
+        for angle in angles {
+            radians := angle * 3.14159 / 180
+            x := centerX + radius * Cos(radians)
+            y := centerY + radius * Sin(radians)
+            points.Push({ x: Round(x), y: Round(y) })
+        }
+    }
+
+    return points
+}
+
+[::ExitApp()
+]::Reload()
