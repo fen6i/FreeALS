@@ -141,7 +141,7 @@ global SettingsTitleMode := MainGui.AddText("w1000 h54 x1230 y312 BackgroundTran
 SettingsTitleMode.Visible := true
 SettingsTitleMode.SetFont("s16 cffffff")
 
-global modeDDL := MainGui.AddDropDownList("x1005 y348 w120", ["Legend Stage", "Story", "Raids", "Cavern", "Portals"])
+global modeDDL := MainGui.AddDropDownList("x1005 y348 w120", ["Legend Stage", "Story", "Raids", "Cavern", "Portals", "Easter Event",])
 modeDDL.SetFont("s9 cffffff")
 modeDDL.Visible := true
 
@@ -1020,6 +1020,8 @@ ModeChanged(*) {
             maps := ["Fire", "Water", "Nature", "Light", "Dark"]
         case "Raids":
             maps := ["Ancient Dungeon"]
+        case "Easter Event":
+            maps := ["Breach"]
         case "Portals":
             maps := ["No-Name Planet", "Demon Skull Village", "Void"]
     }
