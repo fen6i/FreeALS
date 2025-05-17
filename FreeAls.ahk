@@ -2521,9 +2521,16 @@ SetupGame() {
         HandleMapMovement(mode)
     }
     HandleMapMovement(mapName)
-    local delaySec := Number(MoveDelay.Value)
-    if (delaySec > 0)
-        Sleep(delaySec * 1000)
+    local delaySec
+    if IsSet(MoveDelay) && MoveDelay.HasProp("Value") {
+        delaySec := Number(MoveDelay.Value)
+        if (delaySec > 0)
+            Sleep(delaySec * 1000)
+        else
+            Sleep(2000)
+    } else {
+        Sleep(2000)
+    }
     StartGame()
 }
 
